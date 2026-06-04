@@ -8,9 +8,10 @@ from datetime import datetime
 
 # --- 1. Firebaseの初期化 ---
 if not firebase_admin._apps:
-    cred = credentials.Certificate("firebase-key.json")
+    # ネット上の秘密の隠し場所から鍵を取り出す設定です
+    firebase_info = dict(st.secrets["firebase"])
+    cred = credentials.Certificate(firebase_info)
     firebase_admin.initialize_app(cred)
-
 db = firestore.client()
 
 # --- 2. アプリの基本設定（デザインは完全標準に戻しました） ---
