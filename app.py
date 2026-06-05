@@ -195,7 +195,7 @@ else:
                 st.rerun()
 
     # ==========================================
-    # タブ2：大画面お世話カレンダー
+    # タブ2：大画面お世話カレンダー（📱スマホ対応・過去月切り替え版）
     # ==========================================
     with tab2:
         st.header("📅 お世話カレンダー")
@@ -242,12 +242,21 @@ else:
 
         st.markdown("---")
         
+        # ーーー 【改善】年月切り替え機能の追加 ーーー
         now = datetime.now()
-        year = now.year
-        month = now.month
         
-        st.subheader(f"📅 {year}年 {month}月")
+        # セレクトボックスを横並びにする
+        select_year_col, select_month_col = st.columns(2)
+        with select_year_col:
+            year_options = list(range(2024, now.year + 2))
+            selected_year = st.selectbox("年を選択", year_options, index=year_options.index(now.year))
+        with select_month_col:
+            month_options = list(range(1, 13))
+            selected_month = st.selectbox("月を選択", month_options, index=month_options.index(now.month))
         
+        st.subheader(f"📅 {selected_year}年 {selected_month}月")
+        
+        # データの整理
         care_summary = {}
         for doc in care_list:
             item = doc.to_dict()
@@ -263,48 +272,64 @@ else:
                 elif "肥料" in c_type:
                     care_summary[c_date].add("🧪")
         
+        # ーーー 【改善】スマホでも絶対に崩れないHTML/CSSによる正方形グリッド ーーー
+        grid_html = """
+        <div style="
+            display: grid; 
+            grid-template-columns: repeat(7, 1fr); 
+            gap: 5px; 
+            max-width: 100%; 
+            margin: 0 auto;
+        ">
+        """
+        
+        # 曜日ヘッダー
         days_header = ["日", "月", "火", "水", "木", "金", "土"]
-        cols_header = st.columns(7)
-        for i, day_name in enumerate(days_header):
-            cols_header[i].markdown(f"<p style='text-align: center; font-weight: bold; margin-bottom: 5px; color:#555;'>{day_name}</p>", unsafe_allow_html=True)
+        for day_name in days_header:
+            color = "#e74c3c" if day_name == "日" else ("#3498db" if day_name == "土" else "#555")
+            grid_html += f'<div style="text-align: center; font-weight: bold; font-size: 13px; color: {color}; padding-bottom: 5px;">{day_name}</div>'
             
-        first_day_of_week, num_days = calendar.monthrange(year, month)
+        # カレンダーのオフセット（空白マス）計算
+        first_day_of_week, num_days = calendar.monthrange(selected_year, selected_month)
         start_offset = (first_day_of_week + 1) % 7
         
-        day_counter = 1
-        for week in range(6):
-            if day_counter > num_days:
-                break
-            cols_days = st.columns(7)
-            for i in range(7):
-                if week == 0 and i < start_offset:
-                    cols_days[i].write("")
-                elif day_counter > num_days:
-                    cols_days[i].write("")
-                else:
-                    date_str = f"{year}-{month:02d}-{day_counter:02d}"
-                    marks = "".join(list(care_summary.get(date_str, [])))
-                    
-                    is_today = (day_counter == now.day)
-                    bg_color = "#f0f8ff" if is_today else "#ffffff"
-                    border_style = "2px solid #1e90ff" if is_today else "1px solid #e0e0e0"
-                    
-                    cell_html = f"""
-                    <div style="
-                        border: {border_style};
-                        border-radius: 8px;
-                        padding: 6px 2px;
-                        height: 80px;
-                        background-color: {bg_color};
-                        text-align: center;
-                        box-shadow: 1px 1px 3px rgba(0,0,0,0.05);
-                    ">
-                        <div style="font-size: 13px; font-weight: {'bold' if is_today else 'normal'}; color: #333;">{day_counter}</div>
-                        <div style="font-size: 22px; margin-top: 5px; min-height: 26px;">{marks if marks else '&nbsp;'}</div>
-                    </div>
-                    """
-                    cols_days[i].markdown(cell_html, unsafe_allow_html=True)
-                    day_counter += 1
+        # 最初の週の空白を埋める
+        for _ in range(start_offset):
+            grid_html += '<div></div>'
+            
+        # 各日付のマスを生成
+        for day_counter in range(1, num_days + 1):
+            date_str = f"{selected_year}-{selected_month:02d}-{day_counter:02d}"
+            marks = "".join(list(care_summary.get(date_str, [])))
+            
+            # 本当に「今日」のマスだけ青枠にする判定（選択した月が今月の場合のみ）
+            is_today = (selected_year == now.year and selected_month == now.month and day_counter == now.day)
+            bg_color = "#f0f8ff" if is_today else "#ffffff"
+            border_style = "2px solid #1e90ff" if is_today else "1px solid #e0e0e0"
+            font_weight = "bold" if is_today else "normal"
+            
+            # aspect-ratio: 1/1 で強制的に正方形を維持、flexで上下にきれいに配置
+            grid_html += f"""
+            <div style="
+                border: {border_style};
+                border-radius: 8px;
+                padding: 4px 2px;
+                background-color: {bg_color};
+                text-align: center;
+                box-shadow: 1px 1px 3px rgba(0,0,0,0.04);
+                aspect-ratio: 1 / 1;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                min-height: 52px;
+            ">
+                <div style="font-size: 11px; font-weight: {font_weight}; color: #333; line-height: 1;">{day_counter}</div>
+                <div style="font-size: 15px; margin-bottom: 2px; line-height: 1.2; min-height: 18px; word-break: break-all;">{marks if marks else '&nbsp;'}</div>
+            </div>
+            """
+            
+        grid_html += "</div>"
+        st.markdown(grid_html, unsafe_allow_html=True)
 
     # ==========================================
     # タブ3：記録を投稿する
@@ -333,98 +358,3 @@ else:
             
             if st.form_submit_button("🚀 この内容で投稿する"):
                 if plant_name.strip() == "" or plant_name == "🆕 新しい植物を入力する":
-                    st.error("植物の名前を入力、または選択してください！")
-                else:
-                    image_base64 = ""
-                    if uploaded_file is not None:
-                        img = Image.open(uploaded_file)
-                        if img.width > 800:
-                            ratio = 800 / float(img.width)
-                            img = img.resize((800, int(float(img.height) * float(ratio))), Image.Resampling.LANCZOS)
-                        buffer = io.BytesIO()
-                        img = img.convert("RGB")
-                        img.save(buffer, format="JPEG", quality=80)
-                        image_base64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
-                    
-                    db.collection("growth_records").add({
-                        "user_name": st.session_state.user_name,
-                        "plant_name": plant_name,
-                        "date": post_date.strftime("%Y-%m-%d"),
-                        "height": height,
-                        "memo": memo,
-                        "image": image_base64,
-                        "reactions": {"wish": 0, "happy": 0, "thanks": 0, "like": 0, "sad": 0},
-                        "created_at": firestore.SERVER_TIMESTAMP
-                    })
-                    st.success("🎉 成長記録を投稿しました！")
-                    st.rerun()
-
-    # ==========================================
-    # タブ4：植物別の過去ログ（オンデマンド表示に改善）
-    # ==========================================
-    with tab4:
-        st.header("📖 植物ごとの過去ログ一覧")
-        
-        if len(existing_plants) == 0:
-            st.info("まだ植物のデータがありません。")
-        else:
-            search_plant = st.selectbox("表示したい植物を選択", existing_plants, key="search_viz")
-            
-            # ーーー 📝 植物ごとの一言メモ欄の読み込み ーーー
-            meta_ref = db.collection("plant_meta").document(search_plant).get()
-            meta_data = meta_ref.to_dict() if meta_ref.exists else {}
-            
-            st.markdown(f"### 📝 「{search_plant}」の一言メモ")
-            st.caption("見たい項目を押すと内容が表示されます")
-            
-            # 【改善】デフォルトでは非表示（重くならないよう、押したら展開するアコーディオン形式に変更）
-            with st.expander("🌱 「成長について」のメモを見る"):
-                st.info(meta_data.get('growth_comment', '（まだ記入がありません）'))
-                
-            with st.expander("😋 「おすすめの食べ方」のメモを見る"):
-                st.success(meta_data.get('eat_comment', '（まだ記入がありません）'))
-            
-            # メモの編集用フォーム
-            with st.expander("✍️ この植物の一言メモを新しく書く・編集する"):
-                with st.form(key=f"meta_form_{search_plant}"):
-                    g_comment = st.text_area("成長について（例：水を好む、虫がつきやすい等）", value=meta_data.get('growth_comment', ''))
-                    e_comment = st.text_area("こう食べたらおいしかった！（例：サラダ、天ぷらが最高等）", value=meta_data.get('eat_comment', ''))
-                    if st.form_submit_button("一言メモを保存・更新"):
-                        db.collection("plant_meta").document(search_plant).set({
-                            "growth_comment": g_comment,
-                            "eat_comment": e_comment,
-                            "updated_at": firestore.SERVER_TIMESTAMP
-                        }, merge=True)
-                        st.success("一言メモを更新しました！")
-                        st.rerun()
-            
-            st.markdown("---")
-            st.subheader(f"📖 「{search_plant}」の過去の投稿履歴")
-            
-            for g in reversed(growth_all_list):
-                g_data = g.to_dict()
-                if g_data.get("plant_name") == search_plant:
-                    with st.container(border=True):
-                        st.write(f"📅 **{g_data.get('date')}** （投稿者: {g_data.get('user_name')}）")
-                        h = g_data.get('height')
-                        st.write(f"📏 草丈: **{h if h == '未記録' else f'{h} cm'}**")
-                        if g_data.get('memo'):
-                            st.write(f"💬 {g_data.get('memo')}")
-                            
-                        if g_data.get('image'):
-                            img_state_key_tab4 = f"img_visible_tab4_{g.id}"
-                            if img_state_key_tab4 not in st.session_state:
-                                st.session_state[img_state_key_tab4] = False
-                            
-                            if not st.session_state[img_state_key_tab4]:
-                                if st.button("📷 写真を表示する", key=f"btn_open_tab4_{g.id}"):
-                                    st.session_state[img_state_key_tab4] = True
-                                    st.rerun()
-                            else:
-                                try:
-                                    st.image(base64.b64decode(g_data.get('image')), use_container_width=True)
-                                    if st.button("❌ 写真を閉じる", key=f"btn_close_tab4_{g.id}"):
-                                        st.session_state[img_state_key_tab4] = False
-                                        st.rerun()
-                                except:
-                                    pass
