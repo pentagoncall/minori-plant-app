@@ -358,3 +358,98 @@ else:
             
             if st.form_submit_button("🚀 この内容で投稿する"):
                 if plant_name.strip() == "" or plant_name == "🆕 新しい植物を入力する":
+                    st.error("植物の名前を入力、または選択してください！")
+                else:
+                    image_base64 = ""
+                    if uploaded_file is not None:
+                        img = Image.open(uploaded_file)
+                        if img.width > 800:
+                            ratio = 800 / float(img.width)
+                            img = img.resize((800, int(float(img.height) * float(ratio))), Image.Resampling.LANCZOS)
+                        buffer = io.BytesIO()
+                        img = img.convert("RGB")
+                        img.save(buffer, format="JPEG", quality=80)
+                        image_base64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
+                    
+                    db.collection("growth_records").add({
+                        "user_name": st.session_state.user_name,
+                        "plant_name": plant_name,
+                        "date": post_date.strftime("%Y-%m-%d"),
+                        "height": height,
+                        "memo": memo,
+                        "image": image_base64,
+                        "reactions": {"wish": 0, "happy": 0, "thanks": 0, "like": 0, "sad": 0},
+                        "created_at": firestore.SERVER_TIMESTAMP
+                    })
+                    st.success("🎉 成長記録を投稿しました！")
+                    st.rerun()
+
+    # ==========================================
+    # タブ4：植物別の過去ログ（オンデマンド表示に改善）
+    # ==========================================
+    with tab4:
+        st.header("📖 植物ごとの過去ログ一覧")
+        
+        if len(existing_plants) == 0:
+            st.info("まだ植物のデータがありません。")
+        else:
+            search_plant = st.selectbox("表示したい植物を選択", existing_plants, key="search_viz")
+            
+            # ーーー 📝 植物ごとの一言メモ欄の読み込み ーーー
+            meta_ref = db.collection("plant_meta").document(search_plant).get()
+            meta_data = meta_ref.to_dict() if meta_ref.exists else {}
+            
+            st.markdown(f"### 📝 「{search_plant}」の一言メモ")
+            st.caption("見たい項目を押すと内容が表示されます")
+            
+            # 【改善】デフォルトでは非表示（重くならないよう、押したら展開するアコーディオン形式に変更）
+            with st.expander("🌱 「成長について」のメモを見る"):
+                st.info(meta_data.get('growth_comment', '（まだ記入がありません）'))
+                
+            with st.expander("😋 「おすすめの食べ方」のメモを見る"):
+                st.success(meta_data.get('eat_comment', '（まだ記入がありません）'))
+            
+            # メモの編集用フォーム
+            with st.expander("✍️ この植物の一言メモを新しく書く・編集する"):
+                with st.form(key=f"meta_form_{search_plant}"):
+                    g_comment = st.text_area("成長について（例：水を好む、虫がつきやすい等）", value=meta_data.get('growth_comment', ''))
+                    e_comment = st.text_area("こう食べたらおいしかった！（例：サラダ、天ぷらが最高等）", value=meta_data.get('eat_comment', ''))
+                    if st.form_submit_button("一言メモを保存・更新"):
+                        db.collection("plant_meta").document(search_plant).set({
+                            "growth_comment": g_comment,
+                            "eat_comment": e_comment,
+                            "updated_at": firestore.SERVER_TIMESTAMP
+                        }, merge=True)
+                        st.success("一言メモを更新しました！")
+                        st.rerun()
+            
+            st.markdown("---")
+            st.subheader(f"📖 「{search_plant}」の過去の投稿履歴")
+            
+            for g in reversed(growth_all_list):
+                g_data = g.to_dict()
+                if g_data.get("plant_name") == search_plant:
+                    with st.container(border=True):
+                        st.write(f"📅 **{g_data.get('date')}** （投稿者: {g_data.get('user_name')}）")
+                        h = g_data.get('height')
+                        st.write(f"📏 草丈: **{h if h == '未記録' else f'{h} cm'}**")
+                        if g_data.get('memo'):
+                            st.write(f"💬 {g_data.get('memo')}")
+                            
+                        if g_data.get('image'):
+                            img_state_key_tab4 = f"img_visible_tab4_{g.id}"
+                            if img_state_key_tab4 not in st.session_state:
+                                st.session_state[img_state_key_tab4] = False
+                            
+                            if not st.session_state[img_state_key_tab4]:
+                                if st.button("📷 写真を表示する", key=f"btn_open_tab4_{g.id}"):
+                                    st.session_state[img_state_key_tab4] = True
+                                    st.rerun()
+                            else:
+                                try:
+                                    st.image(base64.b64decode(g_data.get('image')), use_container_width=True)
+                                    if st.button("❌ 写真を閉じる", key=f"btn_close_tab4_{g.id}"):
+                                        st.session_state[img_state_key_tab4] = False
+                                        st.rerun()
+                                except:
+                                    pass
