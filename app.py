@@ -5,16 +5,16 @@ from PIL import Image
 import io
 import base64
 from datetime import datetime
+import calendar
 
 # --- 1. Firebaseの初期化 ---
 if not firebase_admin._apps:
-    # ネット上の秘密の隠し場所から鍵を取り出す設定です
-    firebase_info = dict(st.secrets["firebase"])
-    cred = credentials.Certificate(firebase_info)
+    cred = credentials.Certificate("firebase-key.json")
     firebase_admin.initialize_app(cred)
+
 db = firestore.client()
 
-# --- 2. アプリの基本設定（デザインは完全標準に戻しました） ---
+# --- 2. アプリの基本設定 ---
 st.set_page_config(page_title="みのり植物共有アプリ Pro", page_icon="🌿", layout="centered")
 
 st.title("🌿 みのり植物共有アプリ")
@@ -73,8 +73,8 @@ else:
 
     st.markdown("---")
 
-    # 📱 タブの構成（グラフ関連は一切含めず、シンプルに構成しています）
-    tab1, tab2, tab3, tab4 = st.tabs(["🏠 タイムライン", "📅 カレンダー＆水やり・雨", "📝 記録を投稿する", "📖 植物別の過去ログ"])
+    # 📱 タブの構成
+    tab1, tab2, tab3, tab4 = st.tabs(["🏠 タイムライン", "📅 お世話カレンダー", "📝 記録を投稿する", "📖 植物別の過去ログ"])
 
     # ==========================================
     # タブ1：タイムライン
@@ -103,7 +103,7 @@ else:
                     if g_data.get('memo'):
                         st.write(f"💬 {g_data.get('memo')}")
                     
-                    # 📷 画像表示（なにもしないと読み込まない：ボタンを押して初めてデコード・表示する形）
+                    # 📷 画像表示
                     img_base64 = g_data.get('image', "")
                     if img_base64:
                         img_state_key = f"img_visible_{g_id}"
@@ -123,7 +123,7 @@ else:
                             except:
                                 st.warning("画像の表示に失敗しました。")
                     
-                    # ーーー 絵文字スタンプだけのリアクション機能（文字なし・数字のみ） ーーー
+                    # ーーー リアクション機能 ーーー
                     st.markdown("<br>", unsafe_allow_html=True)
                     reactions = g_data.get("reactions", {"wish": 0, "happy": 0, "thanks": 0, "like": 0, "sad": 0})
                     
@@ -195,11 +195,11 @@ else:
                 st.rerun()
 
     # ==========================================
-    # タブ2：カレンダー＆お世話
+    # タブ2：大画面お世話カレンダー
     # ==========================================
     with tab2:
-        st.header("📅 カレンダー＆お世話の記録")
-        st.write("水やり・雨・肥料の記録を一括管理します。")
+        st.header("📅 お世話カレンダー")
+        st.write("ボタンを押して今日のお世話を共有しよう！カレンダーに自動でマークがつきます。")
         
         c_col1, c_col2 = st.columns(2)
         with c_col1:
@@ -242,19 +242,69 @@ else:
 
         st.markdown("---")
         
-        st.subheader("🔍 日付を選んで記録を見る")
-        selected_date = st.date_input("カレンダー（日付を選択）", datetime.now())
-        target_date_str = selected_date.strftime("%Y-%m-%d")
+        now = datetime.now()
+        year = now.year
+        month = now.month
         
-        st.write(f"📂 **{target_date_str} の記録一覧**")
+        st.subheader(f"📅 {year}年 {month}月")
         
-        day_cares = [c.to_dict() for c in care_list if c.to_dict().get("date") == target_date_str]
-        if day_cares:
-            for item in day_cares:
-                memo_str = f" ({item.get('memo')})" if item.get('memo') else ""
-                st.write(f"{item.get('type')} - 報告者: {item.get('user_name')}さん{memo_str}")
-        else:
-            st.caption("この日のお世話記録はありません。")
+        care_summary = {}
+        for doc in care_list:
+            item = doc.to_dict()
+            c_date = item.get("date")
+            c_type = item.get("type", "")
+            if c_date:
+                if c_date not in care_summary:
+                    care_summary[c_date] = set()
+                if "水やり" in c_type:
+                    care_summary[c_date].add("💧")
+                elif "雨" in c_type:
+                    care_summary[c_date].add("☔")
+                elif "肥料" in c_type:
+                    care_summary[c_date].add("🧪")
+        
+        days_header = ["日", "月", "火", "水", "木", "金", "土"]
+        cols_header = st.columns(7)
+        for i, day_name in enumerate(days_header):
+            cols_header[i].markdown(f"<p style='text-align: center; font-weight: bold; margin-bottom: 5px; color:#555;'>{day_name}</p>", unsafe_allow_html=True)
+            
+        first_day_of_week, num_days = calendar.monthrange(year, month)
+        start_offset = (first_day_of_week + 1) % 7
+        
+        day_counter = 1
+        for week in range(6):
+            if day_counter > num_days:
+                break
+            cols_days = st.columns(7)
+            for i in range(7):
+                if week == 0 and i < start_offset:
+                    cols_days[i].write("")
+                elif day_counter > num_days:
+                    cols_days[i].write("")
+                else:
+                    date_str = f"{year}-{month:02d}-{day_counter:02d}"
+                    marks = "".join(list(care_summary.get(date_str, [])))
+                    
+                    is_today = (day_counter == now.day)
+                    bg_color = "#f0f8ff" if is_today else "#ffffff"
+                    border_style = "2px solid #1e90ff" if is_today else "1px solid #e0e0e0"
+                    
+                    cell_html = f"""
+                    <div style="
+                        border: {border_style};
+                        border-radius: 8px;
+                        padding: 6px 2px;
+                        height: 80px;
+                        background-color: {bg_color};
+                        text-align: center;
+                        box-shadow: 1px 1px 3px rgba(0,0,0,0.05);
+                    ">
+                        <div style="font-size: 13px; font-weight: {'bold' if is_today else 'normal'}; color: #333;">{day_counter}</div>
+                        <div style="font-size: 22px; margin-top: 5px; min-height: 26px;">{marks if marks else '&nbsp;'}</div>
+                    </div>
+                    """
+                    cols_days[i].markdown(cell_html, unsafe_allow_html=True)
+                    day_counter += 1
 
     # ==========================================
     # タブ3：記録を投稿する
@@ -310,7 +360,7 @@ else:
                     st.rerun()
 
     # ==========================================
-    # タブ4：植物別の過去ログ
+    # タブ4：植物別の過去ログ（オンデマンド表示に改善）
     # ==========================================
     with tab4:
         st.header("📖 植物ごとの過去ログ一覧")
@@ -320,8 +370,36 @@ else:
         else:
             search_plant = st.selectbox("表示したい植物を選択", existing_plants, key="search_viz")
             
+            # ーーー 📝 植物ごとの一言メモ欄の読み込み ーーー
+            meta_ref = db.collection("plant_meta").document(search_plant).get()
+            meta_data = meta_ref.to_dict() if meta_ref.exists else {}
+            
+            st.markdown(f"### 📝 「{search_plant}」の一言メモ")
+            st.caption("見たい項目を押すと内容が表示されます")
+            
+            # 【改善】デフォルトでは非表示（重くならないよう、押したら展開するアコーディオン形式に変更）
+            with st.expander("🌱 「成長について」のメモを見る"):
+                st.info(meta_data.get('growth_comment', '（まだ記入がありません）'))
+                
+            with st.expander("😋 「おすすめの食べ方」のメモを見る"):
+                st.success(meta_data.get('eat_comment', '（まだ記入がありません）'))
+            
+            # メモの編集用フォーム
+            with st.expander("✍️ この植物の一言メモを新しく書く・編集する"):
+                with st.form(key=f"meta_form_{search_plant}"):
+                    g_comment = st.text_area("成長について（例：水を好む、虫がつきやすい等）", value=meta_data.get('growth_comment', ''))
+                    e_comment = st.text_area("こう食べたらおいしかった！（例：サラダ、天ぷらが最高等）", value=meta_data.get('eat_comment', ''))
+                    if st.form_submit_button("一言メモを保存・更新"):
+                        db.collection("plant_meta").document(search_plant).set({
+                            "growth_comment": g_comment,
+                            "eat_comment": e_comment,
+                            "updated_at": firestore.SERVER_TIMESTAMP
+                        }, merge=True)
+                        st.success("一言メモを更新しました！")
+                        st.rerun()
+            
             st.markdown("---")
-            st.subheader(f"📖 「{search_plant}」の履歴")
+            st.subheader(f"📖 「{search_plant}」の過去の投稿履歴")
             
             for g in reversed(growth_all_list):
                 g_data = g.to_dict()
@@ -333,7 +411,6 @@ else:
                         if g_data.get('memo'):
                             st.write(f"💬 {g_data.get('memo')}")
                             
-                        # タブ4の画像も同様に「押すまで読み込まない」形に統一しました
                         if g_data.get('image'):
                             img_state_key_tab4 = f"img_visible_tab4_{g.id}"
                             if img_state_key_tab4 not in st.session_state:
