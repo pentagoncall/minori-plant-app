@@ -9,12 +9,14 @@ import calendar
 
 # --- 1. Firebaseの初期化 ---
 if not firebase_admin._apps:
-    cred = credentials.Certificate("firebase-key.json")
+    firebase_dict = dict(st.secrets["firebase"])
+    firebase_dict["private_key"] = firebase_dict["private_key"].replace("\\n", "\n")
+    cred = credentials.Certificate(firebase_dict)
     firebase_admin.initialize_app(cred)
 
 db = firestore.client()
 
-# --- 2. アプリの基本設定 ---
+# --- 2. アプリ的基本設定 ---
 st.set_page_config(page_title="みのり植物共有アプリ Pro", page_icon="🌿", layout="centered")
 
 st.title("🌿 みのり植物共有アプリ")
@@ -195,7 +197,7 @@ else:
                 st.rerun()
 
     # ==========================================
-    # タブ2：大画面お世話カレンダー（📱スマホ対応・過去月切り替え版）
+    # タブ2：お世話カレンダー（元の標準版）
     # ==========================================
     with tab2:
         st.header("📅 お世話カレンダー")
@@ -242,10 +244,9 @@ else:
 
         st.markdown("---")
         
-        # ーーー 【改善】年月切り替え機能の追加 ーーー
         now = datetime.now()
         
-        # セレクトボックスを横並びにする
+        # セレクトボックスで過去月も選べる機能は維持しています
         select_year_col, select_month_col = st.columns(2)
         with select_year_col:
             year_options = list(range(2024, now.year + 2))
@@ -272,64 +273,37 @@ else:
                 elif "肥料" in c_type:
                     care_summary[c_date].add("🧪")
         
-        # ーーー 【改善】スマホでも絶対に崩れないHTML/CSSによる正方形グリッド ーーー
-        grid_html = """
-        <div style="
-            display: grid; 
-            grid-template-columns: repeat(7, 1fr); 
-            gap: 5px; 
-            max-width: 100%; 
-            margin: 0 auto;
-        ">
-        """
-        
-        # 曜日ヘッダー
+        # 【修正】元のシンプルな st.columns(7) の配置に戻しました
         days_header = ["日", "月", "火", "水", "木", "金", "土"]
-        for day_name in days_header:
-            color = "#e74c3c" if day_name == "日" else ("#3498db" if day_name == "土" else "#555")
-            grid_html += f'<div style="text-align: center; font-weight: bold; font-size: 13px; color: {color}; padding-bottom: 5px;">{day_name}</div>'
+        cols_header = st.columns(7)
+        for i, day_name in enumerate(days_header):
+            cols_header[i].markdown(f"<p style='text-align:center; font-weight:bold; margin-bottom:0;'>{day_name}</p>", unsafe_allow_html=True)
             
-        # カレンダーのオフセット（空白マス）計算
         first_day_of_week, num_days = calendar.monthrange(selected_year, selected_month)
         start_offset = (first_day_of_week + 1) % 7
         
-        # 最初の週の空白を埋める
-        for _ in range(start_offset):
-            grid_html += '<div></div>'
-            
-        # 各日付のマスを生成
-        for day_counter in range(1, num_days + 1):
-            date_str = f"{selected_year}-{selected_month:02d}-{day_counter:02d}"
-            marks = "".join(list(care_summary.get(date_str, [])))
-            
-            # 本当に「今日」のマスだけ青枠にする判定（選択した月が今月の場合のみ）
-            is_today = (selected_year == now.year and selected_month == now.month and day_counter == now.day)
-            bg_color = "#f0f8ff" if is_today else "#ffffff"
-            border_style = "2px solid #1e90ff" if is_today else "1px solid #e0e0e0"
-            font_weight = "bold" if is_today else "normal"
-            
-            # aspect-ratio: 1/1 で強制的に正方形を維持、flexで上下にきれいに配置
-            grid_html += f"""
-            <div style="
-                border: {border_style};
-                border-radius: 8px;
-                padding: 4px 2px;
-                background-color: {bg_color};
-                text-align: center;
-                box-shadow: 1px 1px 3px rgba(0,0,0,0.04);
-                aspect-ratio: 1 / 1;
-                display: flex;
-                flex-direction: column;
-                justify-content: space-between;
-                min-height: 52px;
-            ">
-                <div style="font-size: 11px; font-weight: {font_weight}; color: #333; line-height: 1;">{day_counter}</div>
-                <div style="font-size: 15px; margin-bottom: 2px; line-height: 1.2; min-height: 18px; word-break: break-all;">{marks if marks else '&nbsp;'}</div>
-            </div>
-            """
-            
-        grid_html += "</div>"
-        st.markdown(grid_html, unsafe_allow_html=True)
+        current_day = 1
+        for week in range(6):
+            if current_day > num_days:
+                break
+            cols_weeks = st.columns(7)
+            for d in range(7):
+                if week == 0 and d < start_offset:
+                    cols_weeks[d].write(" ")
+                elif current_day <= num_days:
+                    date_str = f"{selected_year}-{selected_month:02d}-{current_day:02d}"
+                    marks = "".join(list(care_summary.get(date_str, [])))
+                    
+                    is_today = (selected_year == now.year and selected_month == now.month and current_day == now.day)
+                    
+                    # シンプルに日付とマークを配置
+                    if is_today:
+                        cols_weeks[d].markdown(f"<div style='text-align:center; background-color:#f0f8ff; border:1px solid #1e90ff; border-radius:4px; padding:2px;'><b>【{current_day}】</b><br>{marks if marks else '&nbsp;'}</div>", unsafe_allow_html=True)
+                    else:
+                        cols_weeks[d].markdown(f"<div style='text-align:center;'>{current_day}<br>{marks if marks else '&nbsp;'}</div>", unsafe_allow_html=True)
+                    current_day += 1
+                else:
+                    cols_weeks[d].write(" ")
 
     # ==========================================
     # タブ3：記録を投稿する
@@ -385,7 +359,7 @@ else:
                     st.rerun()
 
     # ==========================================
-    # タブ4：植物別の過去ログ（オンデマンド表示に改善）
+    # タブ4：植物別の過去ログ
     # ==========================================
     with tab4:
         st.header("📖 植物ごとの過去ログ一覧")
@@ -395,21 +369,18 @@ else:
         else:
             search_plant = st.selectbox("表示したい植物を選択", existing_plants, key="search_viz")
             
-            # ーーー 📝 植物ごとの一言メモ欄の読み込み ーーー
             meta_ref = db.collection("plant_meta").document(search_plant).get()
             meta_data = meta_ref.to_dict() if meta_ref.exists else {}
             
             st.markdown(f"### 📝 「{search_plant}」の一言メモ")
             st.caption("見たい項目を押すと内容が表示されます")
             
-            # 【改善】デフォルトでは非表示（重くならないよう、押したら展開するアコーディオン形式に変更）
             with st.expander("🌱 「成長について」のメモを見る"):
                 st.info(meta_data.get('growth_comment', '（まだ記入がありません）'))
                 
             with st.expander("😋 「おすすめの食べ方」のメモを見る"):
                 st.success(meta_data.get('eat_comment', '（まだ記入がありません）'))
             
-            # メモの編集用フォーム
             with st.expander("✍️ この植物の一言メモを新しく書く・編集する"):
                 with st.form(key=f"meta_form_{search_plant}"):
                     g_comment = st.text_area("成長について（例：水を好む、虫がつきやすい等）", value=meta_data.get('growth_comment', ''))
