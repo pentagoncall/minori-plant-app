@@ -17,9 +17,9 @@ if not firebase_admin._apps:
 db = firestore.client()
 
 # --- 2. アプリ的基本設定 ---
-st.set_page_config(page_title="みのり植物共有アプリ Pro", page_icon="🌿", layout="centered")
+st.set_page_config(page_title="みのれこ", page_icon="🌿", layout="centered")
 
-st.title("🌿 みのり植物共有アプリ")
+st.title("🌿 みのれこ")
 
 # --- 3. データの事前読み込み ---
 if "display_limit" not in st.session_state:
@@ -197,7 +197,7 @@ else:
                 st.rerun()
 
     # ==========================================
-    # タブ2：お世話カレンダー（元の標準版）
+    # タブ2：お世話カレンダー
     # ==========================================
     with tab2:
         st.header("📅 お世話カレンダー")
@@ -246,7 +246,6 @@ else:
         
         now = datetime.now()
         
-        # セレクトボックスで過去月も選べる機能は維持しています
         select_year_col, select_month_col = st.columns(2)
         with select_year_col:
             year_options = list(range(2024, now.year + 2))
@@ -257,7 +256,6 @@ else:
         
         st.subheader(f"📅 {selected_year}年 {selected_month}月")
         
-        # データの整理
         care_summary = {}
         for doc in care_list:
             item = doc.to_dict()
@@ -273,7 +271,6 @@ else:
                 elif "肥料" in c_type:
                     care_summary[c_date].add("🧪")
         
-        # 【修正】元のシンプルな st.columns(7) の配置に戻しました
         days_header = ["日", "月", "火", "水", "木", "金", "土"]
         cols_header = st.columns(7)
         for i, day_name in enumerate(days_header):
@@ -296,7 +293,6 @@ else:
                     
                     is_today = (selected_year == now.year and selected_month == now.month and current_day == now.day)
                     
-                    # シンプルに日付とマークを配置
                     if is_today:
                         cols_weeks[d].markdown(f"<div style='text-align:center; background-color:#f0f8ff; border:1px solid #1e90ff; border-radius:4px; padding:2px;'><b>【{current_day}】</b><br>{marks if marks else '&nbsp;'}</div>", unsafe_allow_html=True)
                     else:
