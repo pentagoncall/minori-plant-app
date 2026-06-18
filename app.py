@@ -4,7 +4,7 @@ from firebase_admin import credentials, firestore
 from PIL import Image
 import io
 import base64
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 import calendar
 
 # --- 1. Firebaseの初期化 ---
@@ -177,7 +177,7 @@ else:
                                 c_data = {
                                     "user_name": st.session_state.user_name,
                                     "text": c_text,
-                                    "date": datetime.now().strftime("%m/%d %H:%M"),
+                                    "date": datetime.now(timezone(timedelta(hours=9))).strftime("%m/%d %H:%M"),
                                     "created_at": firestore.SERVER_TIMESTAMP
                                 }
                                 db.collection("growth_records").document(g_id).collection("comments").add(c_data)
@@ -205,10 +205,10 @@ else:
         
         c_col1, c_col2 = st.columns(2)
         with c_col1:
-            if st.button("💧 今日、水やりをした！", use_container_width=True):
+            if st.button("💧 今日, 水やりをした！", use_container_width=True):
                 db.collection("care_records").add({
                     "user_name": st.session_state.user_name,
-                    "date": datetime.now().strftime("%Y-%m-%d"),
+                    "date": datetime.now(timezone(timedelta(hours=9))).strftime("%Y-%m-%d"),
                     "type": "🚰 水やり",
                     "memo": "",
                     "created_at": firestore.SERVER_TIMESTAMP
@@ -219,7 +219,7 @@ else:
             if st.button("☔ 今日は雨が降った！", use_container_width=True):
                 db.collection("care_records").add({
                     "user_name": st.session_state.user_name,
-                    "date": datetime.now().strftime("%Y-%m-%d"),
+                    "date": datetime.now(timezone(timedelta(hours=9))).strftime("%Y-%m-%d"),
                     "type": "☔ 雨の日",
                     "memo": "",
                     "created_at": firestore.SERVER_TIMESTAMP
@@ -234,7 +234,7 @@ else:
                 if st.form_submit_button("🧪 肥料記録を保存"):
                     db.collection("care_records").add({
                         "user_name": st.session_state.user_name,
-                        "date": datetime.now().strftime("%Y-%m-%d"),
+                        "date": datetime.now(timezone(timedelta(hours=9))).strftime("%Y-%m-%d"),
                         "type": "🧪 肥料",
                         "memo": f"【{f_plant}】 {f_memo}",
                         "created_at": firestore.SERVER_TIMESTAMP
@@ -244,7 +244,7 @@ else:
 
         st.markdown("---")
         
-        now = datetime.now()
+        now = datetime.now(timezone(timedelta(hours=9)))
         
         select_year_col, select_month_col = st.columns(2)
         with select_year_col:
